@@ -1,0 +1,22 @@
+[package]
+name = "rimage"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "rimage"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { features = ["extension-module"], version = "0.25.0" }
+numpy = "0.25.0"
+image = "0.25.6"
+
+[profile.release]
+overflow-checks = false
+incremental = true
+codegen-units = 1
+panic = "abort"
+opt-level = 3
+debug = false
+lto = true
