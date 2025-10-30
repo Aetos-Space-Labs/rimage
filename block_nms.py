@@ -11,7 +11,7 @@ SQUARE = 20
 img_gray = cv2.imread(IMAGE_PATH, cv2.IMREAD_GRAYSCALE)
 h, w = img_gray.shape
 
-nms = rimage.PyBlockNms(SQUARE, h, w)
+nms = rimage.PyBlockNms(1, SQUARE, h, w)
 stamp = time.time()
 points = nms.run(img_gray.astype(np.uint16), DIST_BLOCKS, TOTAL_POINTS)
 print(time.time() - stamp)
