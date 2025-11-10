@@ -55,6 +55,10 @@ impl PyBlockNms {
         let end_y = self.blocks_h - start;
         let end_x = self.blocks_w - start;
 
+        let mut nblocks = 0f32;
+        let mut sum = 0f32;
+        let mut sq = 0f32;
+
         for by in start..end_y {
             let y0 = by * self.square;
             let y1 = (y0 + self.square).min(self.height);
@@ -62,12 +66,22 @@ impl PyBlockNms {
             for bx in start..end_x {
                 let x0 = bx * self.square;
                 let x1 = (x0 + self.square).min(self.width);
-                let block_idx = (by * self.blocks_w + bx) as usize;
+
                 let (best_value, best_xy) = find_block_max(&iw, x0, x1, y0, y1);
+                let block_idx = (by * self.blocks_w + bx) as usize;
                 self.max_vals[block_idx] = best_value;
                 self.max_xy[block_idx] = best_xy;
+                
+                let best_safe_value = best_value as f32;
+                sq += best_safe_value.powi(2);
+                sum += best_safe_value;
+                nblocks += 1f32;
             }
         }
+
+        let mean = sum / nblocks;
+        let variance = sq / nblocks - mean.powi(2);
+        let std = variance.sqrt(/**/).max(0.00001);
 
         self.suppressed.fill(false);
 
@@ -78,22 +92,27 @@ impl PyBlockNms {
         });
 
         for &block_idx in &self.order {
+            let xy = self.max_xy[block_idx];
+            let value = self.max_vals[block_idx];
+
+            if self.suppressed[block_idx] || value == 0 {
+                continue
+            }
+
             let bx = (block_idx as i32) % self.blocks_w;
             let by = (block_idx as i32) / self.blocks_w;
 
             if bx < start || bx >= end_x || by < start || by >= end_y {
-                continue;
-            }
-
-            if self.suppressed[block_idx] || self.max_vals[block_idx] == 0 {
-                continue;
+                continue
             }
             
-            let item = self.max_xy[block_idx];
-            out.push(item);
+            
+            let psr = (value as f32 - mean) / std;
+            println!("psr={:?}, mean={:?}, std={:?}", psr, mean, std);
+            out.push(xy);
 
             if out.len() == total {
-                break;
+                break
             }
 
             let y_min = (by - dist_blocks).max(start);
@@ -129,8 +148,8 @@ impl PyBlockNms {
 
         Self { 
             border_skip, square, height, width, 
-            blocks_w, blocks_h, suppressed, order, 
-            max_vals, max_xy,
+            blocks_w, blocks_h, suppressed, 
+            order, max_vals, max_xy,
         }
     }
 }
