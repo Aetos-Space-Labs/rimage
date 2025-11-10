@@ -55,9 +55,9 @@ impl PyBlockNms {
         let end_y = self.blocks_h - start;
         let end_x = self.blocks_w - start;
 
-        let mut nblocks = 0f32;
-        let mut sum = 0f32;
-        let mut sq = 0f32;
+        let mut nblocks = 0f64;
+        let mut sum = 0f64;
+        let mut sq = 0f64;
 
         for by in start..end_y {
             let y0 = by * self.square;
@@ -72,10 +72,10 @@ impl PyBlockNms {
                 self.max_vals[block_idx] = best_value;
                 self.max_xy[block_idx] = best_xy;
                 
-                let best_safe_value = best_value as f32;
+                let best_safe_value = best_value as f64;
                 sq += best_safe_value.powi(2);
                 sum += best_safe_value;
-                nblocks += 1f32;
+                nblocks += 1f64;
             }
         }
 
@@ -107,7 +107,7 @@ impl PyBlockNms {
             }
             
             
-            let psr = (value as f32 - mean) / std;
+            let psr = (value as f64 - mean) / std;
             println!("psr={:?}, mean={:?}, std={:?}", psr, mean, std);
             out.push(xy);
 
