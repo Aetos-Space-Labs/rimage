@@ -17,7 +17,9 @@ points = nms.run(img_gray.astype(np.uint16), DIST_BLOCKS, TOTAL_POINTS)
 print(time.time() - stamp)
 
 img_vis = cv2.cvtColor(img_gray, cv2.COLOR_GRAY2BGR)
-for (x, y) in points: cv2.circle(img_vis, (x, y), 3, (0, 0, 255), -1)
+for p in points: 
+    cv2.circle(img_vis, (p.x, p.y), 3, (0, 0, 255), -1)
+    print(p.psr)
 
 cv2.imshow("Detects", img_vis)
 cv2.waitKey(0)

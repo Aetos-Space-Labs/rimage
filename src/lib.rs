@@ -2,11 +2,10 @@ use pyo3::prelude::*;
 use numpy::PyReadonlyArray2;
 use numpy::ndarray::{ArrayView, Ix2};
 
-type XY = [i32; 2];
+type Unit = (/**/);
+type PyInfoVec = Vec<PyBlockInfo>;
 type ImgView<'a> = ArrayView<'a, u16, Ix2>;
-
-type Unit = ();
-const UNIT: Unit = ();
+const UNIT: Unit = (/**/);
 
 #[pyclass]
 struct PyBlockNms {
@@ -20,13 +19,26 @@ struct PyBlockNms {
 
     order: Vec<usize>,
     suppressed: Vec<bool>,
-    max_vals: Vec<u16>,
-    max_xy: Vec<XY>,
+    maxes: PyInfoVec,
 }
 
-fn find_block_max(iw: &ImgView, x0: i32, x1: i32, y0: i32, y1: i32) -> (u16, XY) {
-    let mut best_xy = [x0, y0];
-    let mut best_value = 0u16;
+#[pyclass]
+#[derive(Clone)]
+struct PyBlockInfo {
+    #[pyo3(get)] max: u16,
+    #[pyo3(get)] psr: f64,
+    #[pyo3(get)] x: i32,
+    #[pyo3(get)] y: i32,
+}
+
+impl Default for PyBlockInfo {
+    fn default(/**/) -> Self {
+        Self { max: 0, psr: 0f64, x: 0, y: 0 }
+    }
+}
+
+fn get_block_info(iw: &ImgView, x0: i32, x1: i32, y0: i32, y1: i32) -> PyBlockInfo {
+    let mut info = PyBlockInfo { max: 0u16, psr: 0f64, x: x0, y: y0 };
 
     for y in y0..y1 {
         let row = iw.row(y as usize);
@@ -34,22 +46,23 @@ fn find_block_max(iw: &ImgView, x0: i32, x1: i32, y0: i32, y1: i32) -> (u16, XY)
         for x in x0..x1 {
             let value = row[x as usize];
 
-            if value > best_value {
-                best_value = value;
-                best_xy = [x, y];
+            if value > info.max {
+                info.max = value;
+                info.x = x;
+                info.y = y;
             }
         }
     }
 
-    (best_value, best_xy)
+    info
 }
 
 #[pymethods]
 impl PyBlockNms {
-    fn run(&mut self, data: PyReadonlyArray2<u16>, dist_blocks: i32, total: usize) -> PyResult<Vec<XY>> {
+    fn run(&mut self, data: PyReadonlyArray2<u16>, dist_blocks: i32, total: usize) -> PyResult<PyInfoVec> {
         // Given image or raw radiometry data: divide image into blocks, find per-block MAX, perform NMS
-        let mut out: Vec<XY> = Vec::new();
-        let iw = data.as_array();
+        let mut out: PyInfoVec = Vec::new(/**/);
+        let iw = data.as_array(/**/);
 
         let start = self.border_skip;
         let end_y = self.blocks_h - start;
@@ -67,12 +80,11 @@ impl PyBlockNms {
                 let x0 = bx * self.square;
                 let x1 = (x0 + self.square).min(self.width);
 
-                let (best_value, best_xy) = find_block_max(&iw, x0, x1, y0, y1);
+                let info = get_block_info(&iw, x0, x1, y0, y1);
                 let block_idx = (by * self.blocks_w + bx) as usize;
-                self.max_vals[block_idx] = best_value;
-                self.max_xy[block_idx] = best_xy;
-                
-                let best_safe_value = best_value as f64;
+                let best_safe_value = info.max as f64;
+
+                self.maxes[block_idx] = info;
                 sq += best_safe_value.powi(2);
                 sum += best_safe_value;
                 nblocks += 1f64;
@@ -86,16 +98,13 @@ impl PyBlockNms {
         self.suppressed.fill(false);
 
         self.order.sort_by(|&a, &b| {
-            let val_a = self.max_vals[a];
-            let val_b = self.max_vals[b];
+            let val_a = self.maxes[a].max;
+            let val_b = self.maxes[b].max;
             val_b.cmp(&val_a)
         });
 
         for &block_idx in &self.order {
-            let xy = self.max_xy[block_idx];
-            let value = self.max_vals[block_idx];
-
-            if self.suppressed[block_idx] || value == 0 {
+            if self.suppressed[block_idx] || self.maxes[block_idx].max == 0 {
                 continue
             }
 
@@ -106,12 +115,11 @@ impl PyBlockNms {
                 continue
             }
             
-            
-            let psr = (value as f64 - mean) / std;
-            println!("psr={:?}, mean={:?}, std={:?}", psr, mean, std);
-            out.push(xy);
+            let mut info = self.maxes[block_idx].clone(/**/);
+            info.psr = (info.max as f64 - mean) / std;
+            out.push(info);
 
-            if out.len() == total {
+            if out.len(/**/) == total {
                 break
             }
 
@@ -137,10 +145,9 @@ impl PyBlockNms {
         let blocks_w = (width + square - 1) / square;
         let nblocks = (blocks_h * blocks_w) as usize;
 
-        let max_vals = vec![0; nblocks];
-        let max_xy = vec![[0, 0]; nblocks];
         let suppressed = vec![false; nblocks];
         let mut order = Vec::with_capacity(nblocks);
+        let maxes = vec![PyBlockInfo::default(/**/); nblocks];
 
         for i in 0..nblocks {
             order.push(i);
@@ -149,13 +156,14 @@ impl PyBlockNms {
         Self { 
             border_skip, square, height, width, 
             blocks_w, blocks_h, suppressed, 
-            order, max_vals, max_xy,
+            order, maxes,
         }
     }
 }
 
 #[pymodule]
 fn rimage(m: &Bound<'_, PyModule>) -> PyResult<Unit> {
+    m.add_class::<PyBlockInfo>(/**/)?;
     m.add_class::<PyBlockNms>(/**/)?;
     Ok(UNIT)
 }
